@@ -13,7 +13,16 @@ import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.ecc.tictactoe.callback.AwaitingConnectionViewHolderCallback
+import com.ecc.tictactoe.connection.Host
+import com.ecc.tictactoe.connection.Peer
+import com.ecc.tictactoe.connection.callback.PeerCallback
 import com.ecc.tictactoe.data.AlertActionConfig
+import com.ecc.tictactoe.view.AcceptedConnectionsAdapter
+import com.ecc.tictactoe.view.AwaitingConnectionsAdapter
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
 import kotlinx.android.synthetic.main.activity_main.*
@@ -29,71 +38,54 @@ class MainActivity : AppCompatActivity() {
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
     private val REQUEST_CODE_REQUIRED_PERMISSIONS = 1
-    private val CODE_LENGTH = 5
-    private lateinit var connectionLifecycleCallback: ConnectionLifecycleCallback
+
+    private lateinit var host: Host
+    private lateinit var peer: Peer
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         this.connectionsClient = Nearby.getConnectionsClient(this)
 
-        this.connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
-            override fun onConnectionResult(
-                endpointId: String,
-                connectionResolution: ConnectionResolution
-            ) {
-                if (connectionResolution.status.statusCode == ConnectionsStatusCodes.STATUS_OK) {
-                    val payloadString = "Subramanian"
-                    connectionsClient.sendPayload(
-                        endpointId,
-                        Payload.fromBytes(payloadString.toByteArray())
-                    )
-                }
-            }
-
-            override fun onDisconnected(endPointId: String) {
-                Log.d("onDisconnected", "Called")
-            }
-
-            override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-                val title = "Accept Connection"
-                val message =
-                    "Do you want to accept connection request from " + info.authenticationToken
-                val positiveButton = AlertActionConfig(
-                    AlertDialog.BUTTON_POSITIVE,
-                    "Accept",
-                    DialogInterface.OnClickListener { _, _ ->
-                        connectionsClient.acceptConnection(endpointId, object : PayloadCallback() {
-                            override fun onPayloadReceived(endPointId: String, payload: Payload) {
-                                Log.d("onPayloadReceived", "Called")
-                            }
-
-                            override fun onPayloadTransferUpdate(
-                                endPointId: String,
-                                transferUpdate: PayloadTransferUpdate
-                            ) {
-                                Log.d("onPayloadTransferUpdate", "Called")
-                            }
-                        })
-                    })
-                val negativeButton = AlertActionConfig(
-                    AlertDialog.BUTTON_NEGATIVE,
-                    "Cancel",
-                    DialogInterface.OnClickListener { _, _ ->
-                        connectionsClient.rejectConnection(endpointId)
-                    })
-                showDialog(title, message, positiveButton, negativeButton)
-            }
-        }
-
         action_host.setOnClickListener {
             if (!isNameAvailable()) {
                 return@setOnClickListener
             }
 
-            val code = randomString(CODE_LENGTH)
+            val awaitingConnectionsAdapter =
+                AwaitingConnectionsAdapter(listOf(), object : AwaitingConnectionViewHolderCallback {
+                    override fun acceptConnection(endpointId: String) {
+                        host.accept(endpointId)
+                    }
+
+                    override fun rejectConnection(endpointId: String) {
+                        host.reject(endpointId)
+                    }
+                })
+            val acceptedConnectionsAdapter = AcceptedConnectionsAdapter(listOf())
+
+            val name = player_name.text.toString()
+            host = Host(this, name)
+            host.awaitingConnectionsObservable.observe(this, Observer { players ->
+                awaitingConnectionsAdapter.players = players
+                awaitingConnectionsAdapter.notifyDataSetChanged()
+            })
+            host.acceptedConnectionsObservable.observe(this, Observer { players ->
+                acceptedConnectionsAdapter.players = players
+                acceptedConnectionsAdapter.notifyDataSetChanged()
+            })
+            val code = host.advertise()
             host_code.text = code
-            startAdvertising(code)
+
+            val awaitingConnectionsLayoutManager = LinearLayoutManager(this)
+            awaitingConnectionsLayoutManager.orientation = RecyclerView.VERTICAL
+            awaiting_connections.layoutManager = awaitingConnectionsLayoutManager
+            awaiting_connections.adapter = awaitingConnectionsAdapter
+
+            val acceptedConnectionsLayoutManager = LinearLayoutManager(this)
+            acceptedConnectionsLayoutManager.orientation = RecyclerView.VERTICAL
+            accepted_connection.layoutManager = acceptedConnectionsLayoutManager
+            accepted_connection.adapter = acceptedConnectionsAdapter
 
             it.isEnabled = false
             action_join.isEnabled = false
@@ -105,8 +97,8 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            val hostCode = code_to_join.text
-            if (hostCode.toString() == "") {
+            val hostCode = code_to_join.text.toString()
+            if (hostCode == "") {
                 val title = "Forgot Code?"
                 val message = "Please enter the code provided by host and then click Join"
                 val neutralButton = AlertActionConfig(
@@ -118,7 +110,25 @@ class MainActivity : AppCompatActivity() {
                 showDialog(title, message, neutralButton)
                 return@setOnClickListener
             }
-            startDiscovery(hostCode.toString())
+
+            val name = player_name.text.toString()
+            peer = Peer(this, name, object : PeerCallback {
+                override fun awaitingConnection(authenticationToken: String) {
+                    peer_status.text =
+                        "Waiting for the connection to be accepted. Authentication Token: $authenticationToken"
+                }
+
+                override fun connectionAccepted() {
+                    peer_status.text = "Connection Accepted"
+                }
+
+                override fun connectionRejected() {
+                    peer_status.text = "Connection Rejected"
+                }
+
+            })
+            peer.discover(hostCode)
+            peer_status.text = "Discovering"
 
             it.isEnabled = false
             code_to_join.isEnabled = false
@@ -145,6 +155,8 @@ class MainActivity : AppCompatActivity() {
                 it.isEnabled = false
             }
         }
+
+
     }
 
     private fun isNameAvailable(): Boolean {
@@ -160,75 +172,6 @@ class MainActivity : AppCompatActivity() {
             showDialog(title, message, neutralButton)
         }
         return !player_name.isEnabled
-    }
-
-    private fun startAdvertising(code: String) {
-        val advertisingTask = connectionsClient.startAdvertising(
-            code,
-            packageName,
-            connectionLifecycleCallback,
-            AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
-        )
-
-        advertisingTask.addOnSuccessListener {
-            Log.d("AdvertisingTask", "Succeeded")
-        }
-
-        advertisingTask.addOnCanceledListener {
-            Log.d("AdvertisingTask", "Cancelled")
-        }
-
-        advertisingTask.addOnCompleteListener {
-            Log.d("AdvertisingTask", "Completed")
-        }
-
-        advertisingTask.addOnFailureListener {
-            Log.d("AdvertisingTask", "Failed")
-        }
-    }
-
-    private fun startDiscovery(code: String) {
-        val discoveryTask =
-            connectionsClient.startDiscovery(packageName, object : EndpointDiscoveryCallback() {
-                override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-                    val playerName = player_name.text.toString()
-                    if (info.endpointName == code) {
-                        connectionsClient.requestConnection(
-                            playerName,
-                            endpointId,
-                            connectionLifecycleCallback
-                        )
-                    }
-                }
-
-                override fun onEndpointLost(endpointId: String) {
-                    Log.d("onEndpointLost", endpointId)
-                }
-            }, DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build())
-
-        discoveryTask.addOnSuccessListener {
-            Log.d("DiscoveryTask", "Succeeded")
-        }
-
-        discoveryTask.addOnCanceledListener {
-            Log.d("DiscoveryTask", "Cancelled")
-        }
-
-        discoveryTask.addOnCompleteListener {
-            Log.d("DiscoveryTask", "Completed")
-        }
-
-        discoveryTask.addOnFailureListener {
-            Log.d("DiscoveryTask", "Failed")
-        }
-    }
-
-    private fun randomString(length: Int): String {
-        val charPool: List<Char> = ('a'..'z') + ('A'..'Z') + ('0'..'9')
-        return (1..length)
-            .map { kotlin.random.Random.nextInt(0, charPool.size) }
-            .map(charPool::get)
-            .joinToString("")
     }
 
     private fun hasPermissions(context: Context, permissions: Array<String>): Boolean {
@@ -315,8 +258,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        connectionsClient.stopAdvertising()
-        connectionsClient.stopDiscovery()
     }
 
     override fun onRequestPermissionsResult(

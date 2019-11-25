@@ -13,14 +13,21 @@ import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.ecc.tictactoe.data.AlertActionConfig
+import com.ecc.tictactoe.data.Player
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
 import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var connectedPlayerAdapter: ConnectedPlayerAdapter
     private lateinit var connectionsClient: ConnectionsClient
+    private lateinit var connectionLifecycleCallback: ConnectionLifecycleCallback
+    private val connectedPlayersList = arrayListOf<Player>()
+    private val pendingPlayersList = arrayListOf<Player>()
+
     private val REQUIRED_PERMISSIONS = arrayOf(
         Manifest.permission.BLUETOOTH,
         Manifest.permission.BLUETOOTH_ADMIN,
@@ -29,8 +36,7 @@ class MainActivity : AppCompatActivity() {
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
     private val REQUEST_CODE_REQUIRED_PERMISSIONS = 1
-    private val CODE_LENGTH = 5
-    private lateinit var connectionLifecycleCallback: ConnectionLifecycleCallback
+    private val CODE_LENGTH = 1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,12 +49,30 @@ class MainActivity : AppCompatActivity() {
                 connectionResolution: ConnectionResolution
             ) {
                 if (connectionResolution.status.statusCode == ConnectionsStatusCodes.STATUS_OK) {
-                    val payloadString = "Subramanian"
-                    connectionsClient.sendPayload(
-                        endpointId,
-                        Payload.fromBytes(payloadString.toByteArray())
-                    )
+                    pendingPlayersList.forEach {
+                        if (it.endPointId == endpointId) {
+                            connectedPlayersList.add(it)
+                            pendingPlayersList.remove(it)
+                            return@forEach
+                        }
+                    }
+                } else {
+                    pendingPlayersList.forEach {
+                        if (it.endPointId == endpointId) {
+                            pendingPlayersList.remove(it)
+                            return@forEach
+                        }
+                    }
                 }
+                connectedPlayerAdapter.updatePlayers(connectedPlayersList)
+                val endpointIdList = arrayListOf<String>()
+                connectedPlayersList.forEach {
+                    endpointIdList.add(it.endPointId)
+                }
+                connectionsClient.sendPayload(
+                    endpointIdList,
+                    Payload.fromBytes("Connected Player List".toByteArray())
+                )
             }
 
             override fun onDisconnected(endPointId: String) {
@@ -56,6 +80,13 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
+                pendingPlayersList.add(
+                    Player(
+                        endpointId,
+                        info.authenticationToken,
+                        info.endpointName
+                    )
+                )
                 val title = "Accept Connection"
                 val message =
                     "Do you want to accept connection request from " + info.authenticationToken
@@ -65,7 +96,8 @@ class MainActivity : AppCompatActivity() {
                     DialogInterface.OnClickListener { _, _ ->
                         connectionsClient.acceptConnection(endpointId, object : PayloadCallback() {
                             override fun onPayloadReceived(endPointId: String, payload: Payload) {
-                                Log.d("onPayloadReceived", "Called")
+                                val string = String(payload.asBytes()!!)
+                                Log.d("onPayloadReceived", string)
                             }
 
                             override fun onPayloadTransferUpdate(
@@ -145,6 +177,13 @@ class MainActivity : AppCompatActivity() {
                 it.isEnabled = false
             }
         }
+
+        connection_request_list.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            connectedPlayerAdapter = ConnectedPlayerAdapter()
+            adapter = connectedPlayerAdapter
+        }
+
     }
 
     private fun isNameAvailable(): Boolean {
@@ -317,6 +356,9 @@ class MainActivity : AppCompatActivity() {
         super.onStop()
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
+        connectedPlayersList.clear()
+        pendingPlayersList.clear()
+        connectedPlayerAdapter.updatePlayers(listOf())
     }
 
     override fun onRequestPermissionsResult(

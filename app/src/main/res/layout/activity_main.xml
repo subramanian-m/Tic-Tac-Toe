@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:id="@+id/host_code"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Host Code"
+        android:textSize="10pt"
+        android:textStyle="bold"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <EditText
+        android:id="@+id/code_to_join"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:focusedByDefault="false"
+        android:hint="Enter code to join"
+        app:layout_constraintTop_toBottomOf="@id/host_code" />
+
+    <Button
+        android:id="@+id/action_host"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Host"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toStartOf="@+id/action_join"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/code_to_join" />
+
+    <Button
+        android:id="@+id/action_join"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Join"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/action_host"
+        app:layout_constraintTop_toBottomOf="@id/code_to_join" />
+
+    <RelativeLayout
+        android:id="@+id/grant_permission_panel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0.5"
+        android:background="#000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:translationZ="100dp"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/grant_permission"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:text="Grant Permission"
+            android:textStyle="bold" />
+
+    </RelativeLayout>
+
+    <EditText
+        android:id="@+id/player_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Enter your name here"
+        app:layout_constraintTop_toBottomOf="@id/action_join" />
+
+    <Button
+        android:id="@+id/submit_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Submit Name"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/player_name" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/connection_request_list"
+        class="androidx.appcompat.app.AlertController$RecycleListView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/submit_name">
+
+    </androidx.recyclerview.widget.RecyclerView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

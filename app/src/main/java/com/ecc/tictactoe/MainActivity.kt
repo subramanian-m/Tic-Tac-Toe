@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
-import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -21,10 +20,12 @@ import com.ecc.tictactoe.connection.Host
 import com.ecc.tictactoe.connection.Peer
 import com.ecc.tictactoe.connection.callback.PeerCallback
 import com.ecc.tictactoe.data.AlertActionConfig
+import com.ecc.tictactoe.game.GameFragment
 import com.ecc.tictactoe.view.AcceptedConnectionsAdapter
 import com.ecc.tictactoe.view.AwaitingConnectionsAdapter
 import com.google.android.gms.nearby.Nearby
-import com.google.android.gms.nearby.connection.*
+import com.google.android.gms.nearby.connection.ConnectionsClient
+import com.google.gson.Gson
 import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity() {
@@ -156,6 +157,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        launch_game.setOnClickListener {
+
+            val gameFragment = GameFragment()
+            gameFragment.count = 0
+            supportFragmentManager
+                .beginTransaction()
+                .replace(R.id.game_page, gameFragment)
+                .commit()
+        }
 
     }
 

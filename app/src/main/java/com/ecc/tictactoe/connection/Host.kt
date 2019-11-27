@@ -85,6 +85,10 @@ class Host(private val context: Context, val name: String) {
             connectionLifecycleCallback,
             AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
         )
+        acceptedConnections.add(
+            Player("_endpointId_", name, "_authenticationToken_")
+        )
+        acceptedConnectionsObservable.value = acceptedConnections
 
         advertisingTask.addOnSuccessListener {
             Log.d("AdvertisingTask", "Succeeded")

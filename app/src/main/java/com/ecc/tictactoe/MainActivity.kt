@@ -24,7 +24,7 @@ import com.ecc.tictactoe.data.AlertActionConfig
 import com.ecc.tictactoe.view.AcceptedConnectionsAdapter
 import com.ecc.tictactoe.view.AwaitingConnectionsAdapter
 import com.google.android.gms.nearby.Nearby
-import com.google.android.gms.nearby.connection.*
+import com.google.android.gms.nearby.connection.ConnectionsClient
 import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity() {
@@ -127,6 +127,13 @@ class MainActivity : AppCompatActivity() {
                 }
 
             })
+            peer.acceptedConnectionsObservable.observe(this, Observer { players ->
+                Log.d("-----------------", "-----------------")
+                players.forEach { player ->
+                    Log.e("Player ", player.toString())
+                }
+            })
+
             peer.discover(hostCode)
             peer_status.text = "Discovering"
 

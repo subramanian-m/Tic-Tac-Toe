@@ -2,6 +2,7 @@ package com.ecc.tictactoe.connection
 
 import android.content.Context
 import android.util.Log
+import androidx.lifecycle.MutableLiveData
 import com.ecc.tictactoe.connection.callback.PeerCallback
 import com.ecc.tictactoe.connection.data.MetaPayloadData
 import com.ecc.tictactoe.connection.data.PayloadData
@@ -15,9 +16,12 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
     private val connectionsClient: ConnectionsClient = Nearby.getConnectionsClient(context)
     private val acceptedConnections: MutableList<Player> = mutableListOf()
 
+    val acceptedConnectionsObservable: MutableLiveData<List<Player>> = MutableLiveData()
+
     private var hostEndpointId: String? = null
     private lateinit var host: Player
     private lateinit var selfEndpointId: String
+    private lateinit var authenticationToken: String
 
     private val connectionLifecycleCallback: ConnectionLifecycleCallback =
         object : ConnectionLifecycleCallback() {
@@ -34,10 +38,12 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
 
             override fun onDisconnected(endpointId: String) {
                 acceptedConnections.removePlayer(endpointId)
+                acceptedConnectionsObservable.value = acceptedConnections
             }
 
             override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
                 if (hostEndpointId != null && endpointId == hostEndpointId) {
+                    this@Peer.authenticationToken = info.authenticationToken
                     host = Player(endpointId, "_host_", info.authenticationToken)
                     connectionsClient.acceptConnection(endpointId, payloadCallback)
                     peerCallback.awaitingConnection(info.authenticationToken)
@@ -59,6 +65,11 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
                     host =
                         Player(host.endPointId, metaPayloadData.hostName, host.authenticationToken)
                     selfEndpointId = metaPayloadData.endpointId
+
+                    acceptedConnections.add(host)
+                    acceptedConnections.removePlayer("_endpointId_")
+                    acceptedConnections.add(Player(selfEndpointId, name, authenticationToken))
+                    acceptedConnectionsObservable.value = acceptedConnections
                 }
             }
         }
@@ -91,6 +102,8 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
                 },
                 DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
             )
+        acceptedConnections.add(Player("_endpointId_", name, "_authenticationToken_"))
+        acceptedConnectionsObservable.value = acceptedConnections
 
         discoveryTask.addOnSuccessListener {
             Log.d("DiscoveryTask", "Succeeded")

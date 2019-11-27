@@ -18,7 +18,8 @@ class Host(private val context: Context, val name: String) {
     private val CODE_LENGTH = 1
     private val connectionsClient: ConnectionsClient = Nearby.getConnectionsClient(context)
     private val awaitingConnections: MutableList<Player> = mutableListOf()
-    private val acceptedConnections: MutableList<Player> = mutableListOf()
+    var acceptedConnections: MutableList<Player> = mutableListOf()
+        private set
 
     val acceptedConnectionsObservable: MutableLiveData<List<Player>> = MutableLiveData()
     val awaitingConnectionsObservable: MutableLiveData<List<Player>> = MutableLiveData()
@@ -121,8 +122,18 @@ class Host(private val context: Context, val name: String) {
         }
     }
 
+    fun rejectAll() {
+        awaitingConnections.forEach { player ->
+            reject(player.endPointId)
+        }
+    }
+
     fun stop() {
         connectionsClient.stopAdvertising()
+    }
+
+    fun sendPayload(endpointId: String, payload: String) {
+        connectionsClient.sendPayload(endpointId, PayloadData("data", payload).toPayload())
     }
 
     private fun randomString(length: Int): String {

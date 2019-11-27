@@ -20,11 +20,15 @@ import com.ecc.tictactoe.callback.AwaitingConnectionViewHolderCallback
 import com.ecc.tictactoe.connection.Host
 import com.ecc.tictactoe.connection.Peer
 import com.ecc.tictactoe.connection.callback.PeerCallback
+import com.ecc.tictactoe.connection.data.PayloadData
 import com.ecc.tictactoe.data.AlertActionConfig
+import com.ecc.tictactoe.data.InitiateGame
 import com.ecc.tictactoe.view.AcceptedConnectionsAdapter
 import com.ecc.tictactoe.view.AwaitingConnectionsAdapter
+import com.ecc.tictactoe.view.GameFragment
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.ConnectionsClient
+import com.google.gson.Gson
 import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity() {
@@ -41,6 +45,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var host: Host
     private lateinit var peer: Peer
+    private var gson = Gson()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,6 +78,11 @@ class MainActivity : AppCompatActivity() {
             host.acceptedConnectionsObservable.observe(this, Observer { players ->
                 acceptedConnectionsAdapter.players = players
                 acceptedConnectionsAdapter.notifyDataSetChanged()
+
+                if (players.count() == 2) {
+                    start_game.isEnabled = true
+                    host.rejectAll()
+                }
             })
             val code = host.advertise()
             host_code.text = code
@@ -126,9 +136,26 @@ class MainActivity : AppCompatActivity() {
                     peer_status.text = "Connection Rejected"
                 }
 
+                override fun payloadReceived(payload: String) {
+                    val payloadData = gson.fromJson<PayloadData>(payload, PayloadData::class.java)
+                    if (payloadData.type == "_initiate_") {
+                        val initiateGame =
+                            gson.fromJson<InitiateGame>(payloadData.value, InitiateGame::class.java)
+                        val gameFragment = GameFragment(
+                            peer.selfEndpointId,
+                            initiateGame.player1,
+                            initiateGame.symbol1,
+                            initiateGame.player2,
+                            initiateGame.symbol2
+                        )
+                        val transaction = supportFragmentManager.beginTransaction()
+                        transaction.add(R.id.game_container, gameFragment)
+                        transaction.commit()
+                    }
+                }
+
             })
             peer.acceptedConnectionsObservable.observe(this, Observer { players ->
-                Log.d("-----------------", "-----------------")
                 players.forEach { player ->
                     Log.e("Player ", player.toString())
                 }
@@ -163,6 +190,37 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        start_game.setOnClickListener {
+            it.isEnabled = false
+
+            val randomValue = (-1..2).shuffled().first()
+            val player1Symbol: Char = if (randomValue == 0) 'X' else 'O'
+            val player2Symbol: Char = if (randomValue == 0) 'O' else 'X'
+
+            host.stop()
+            val connectedPlayers = host.acceptedConnections
+            if (connectedPlayers.count() == 2) {
+                val gameEvent = InitiateGame(
+                    connectedPlayers[0],
+                    player1Symbol,
+                    connectedPlayers[1],
+                    player2Symbol
+                )
+                val payloadData = PayloadData("_initiate_", gson.toJson(gameEvent))
+                host.sendPayload(connectedPlayers[1].endPointId, gson.toJson(payloadData))
+
+                val gameFragment = GameFragment(
+                    connectedPlayers[0].endPointId,
+                    connectedPlayers[0],
+                    player1Symbol,
+                    connectedPlayers[1],
+                    player2Symbol
+                )
+                val transaction = supportFragmentManager.beginTransaction()
+                transaction.add(R.id.game_container, gameFragment)
+                transaction.commit()
+            }
+        }
 
     }
 

@@ -1,11 +1,19 @@
 package com.ecc.tictactoe.data
 
-data class Player(val endPointId: String, val name: String, val authenticationToken: String)
+import com.google.gson.annotations.SerializedName
+
+data class Player(
+    @SerializedName("endpointId") val endPointId: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("authenticationToken") val authenticationToken: String
+)
 
 fun MutableList<Player>.removePlayer(endpointId: String) {
-    this.forEach { player ->
+    for (i in 0 until this.count()) {
+        val player = this[i]
         if (player.endPointId == endpointId) {
-            this.remove(player)
+            this.removeAt(i)
+            return
         }
     }
 }

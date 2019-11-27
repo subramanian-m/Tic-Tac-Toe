@@ -14,13 +14,15 @@ import com.google.gson.Gson
 
 class Peer(private val context: Context, val name: String, val peerCallback: PeerCallback) {
     private val connectionsClient: ConnectionsClient = Nearby.getConnectionsClient(context)
-    private val acceptedConnections: MutableList<Player> = mutableListOf()
+    var acceptedConnections: MutableList<Player> = mutableListOf()
+        private set
 
     val acceptedConnectionsObservable: MutableLiveData<List<Player>> = MutableLiveData()
 
     private var hostEndpointId: String? = null
     private lateinit var host: Player
-    private lateinit var selfEndpointId: String
+    lateinit var selfEndpointId: String
+        private set
     private lateinit var authenticationToken: String
 
     private val connectionLifecycleCallback: ConnectionLifecycleCallback =
@@ -31,6 +33,7 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
             ) {
                 if (connectionResolution.status.statusCode == ConnectionsStatusCodes.STATUS_OK) {
                     peerCallback.connectionAccepted()
+                    connectionsClient.stopDiscovery()
                 } else {
                     peerCallback.connectionRejected()
                 }
@@ -53,7 +56,6 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
 
     private val payloadCallback: PayloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            Log.d("PayloadReceived", "Called")
             if (host.endPointId == endpointId) {
                 val bytes = payload.asBytes() ?: return
                 val payloadData =
@@ -70,6 +72,8 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
                     acceptedConnections.removePlayer("_endpointId_")
                     acceptedConnections.add(Player(selfEndpointId, name, authenticationToken))
                     acceptedConnectionsObservable.value = acceptedConnections
+                } else if (payloadData.type == "data") {
+                    peerCallback.payloadReceived(payloadData.value)
                 }
             }
         }
@@ -124,5 +128,9 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
 
     fun stop() {
         connectionsClient.stopDiscovery()
+    }
+
+    fun sendPayload(endpointId: String, payload: String) {
+        connectionsClient.sendPayload(endpointId, Payload.fromBytes(payload.toByteArray()))
     }
 }

@@ -4,4 +4,6 @@ interface PeerCallback {
     fun awaitingConnection(authenticationToken: String)
     fun connectionAccepted()
     fun connectionRejected()
+
+    fun payloadReceived(payload: String)
 }

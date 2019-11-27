@@ -3,12 +3,15 @@ package com.ecc.tictactoe.connection
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
+import com.ecc.tictactoe.connection.data.MetaPayloadData
+import com.ecc.tictactoe.connection.data.PayloadData
 import com.ecc.tictactoe.data.Player
 import com.ecc.tictactoe.data.containsPlayer
 import com.ecc.tictactoe.data.fetchPlayer
 import com.ecc.tictactoe.data.removePlayer
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
+import com.google.gson.Gson
 
 class Host(private val context: Context, val name: String) {
 
@@ -35,6 +38,10 @@ class Host(private val context: Context, val name: String) {
 
                             awaitingConnections.removePlayer(endpointId)
                             this@Host.awaitingConnectionsObservable.value = awaitingConnections
+
+                            val metaPayloadData = MetaPayloadData(endpointId, name)
+                            val payloadData = PayloadData("meta", Gson().toJson(metaPayloadData))
+                            connectionsClient.sendPayload(endpointId, payloadData.toPayload())
                         }
                     }
                 }

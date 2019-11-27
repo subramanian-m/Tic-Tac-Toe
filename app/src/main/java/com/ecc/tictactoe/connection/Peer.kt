@@ -3,10 +3,13 @@ package com.ecc.tictactoe.connection
 import android.content.Context
 import android.util.Log
 import com.ecc.tictactoe.connection.callback.PeerCallback
+import com.ecc.tictactoe.connection.data.MetaPayloadData
+import com.ecc.tictactoe.connection.data.PayloadData
 import com.ecc.tictactoe.data.Player
 import com.ecc.tictactoe.data.removePlayer
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
+import com.google.gson.Gson
 
 class Peer(private val context: Context, val name: String, val peerCallback: PeerCallback) {
     private val connectionsClient: ConnectionsClient = Nearby.getConnectionsClient(context)
@@ -43,8 +46,21 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
         }
 
     private val payloadCallback: PayloadCallback = object : PayloadCallback() {
-        override fun onPayloadReceived(p0: String, p1: Payload) {
+        override fun onPayloadReceived(endpointId: String, payload: Payload) {
             Log.d("PayloadReceived", "Called")
+            if (host.endPointId == endpointId) {
+                val bytes = payload.asBytes() ?: return
+                val payloadData =
+                    Gson().fromJson<PayloadData>(String(bytes), PayloadData::class.java)
+                if (payloadData.type == "meta") {
+                    val metaPayloadData = Gson().fromJson<MetaPayloadData>(
+                        payloadData.value, MetaPayloadData::class.java
+                    )
+                    host =
+                        Player(host.endPointId, metaPayloadData.hostName, host.authenticationToken)
+                    selfEndpointId = metaPayloadData.endpointId
+                }
+            }
         }
 
         override fun onPayloadTransferUpdate(p0: String, p1: PayloadTransferUpdate) {

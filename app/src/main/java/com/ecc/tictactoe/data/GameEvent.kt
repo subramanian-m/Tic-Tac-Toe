@@ -14,7 +14,7 @@ data class GameTurn(
 )
 
 data class GameMove(
-    @SerializedName("player") val player: String,
+    @SerializedName("endpointId") val endpointId: String,
     @SerializedName("row") val row: Int,
     @SerializedName("column") val column: Int
 )

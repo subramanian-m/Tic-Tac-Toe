@@ -3,6 +3,7 @@ package com.ecc.tictactoe.connection
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
+import com.ecc.tictactoe.connection.callback.HostCallback
 import com.ecc.tictactoe.connection.data.MetaPayloadData
 import com.ecc.tictactoe.connection.data.PayloadData
 import com.ecc.tictactoe.data.Player
@@ -13,7 +14,7 @@ import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
 import com.google.gson.Gson
 
-class Host(private val context: Context, val name: String) {
+class Host(private val context: Context, val name: String, val hostCallback: HostCallback) {
 
     private val CODE_LENGTH = 1
     private val connectionsClient: ConnectionsClient = Nearby.getConnectionsClient(context)
@@ -68,8 +69,13 @@ class Host(private val context: Context, val name: String) {
         }
 
     private val payloadCallback: PayloadCallback = object : PayloadCallback() {
-        override fun onPayloadReceived(p0: String, p1: Payload) {
-            Log.d("PayloadReceived", "Called")
+        override fun onPayloadReceived(endpointId: String, payload: Payload) {
+            val bytes = payload.asBytes() ?: return
+            val payloadData =
+                Gson().fromJson<PayloadData>(String(bytes), PayloadData::class.java)
+            if (payloadData.type == "data") {
+                hostCallback.payloadReceived(payloadData.value)
+            }
         }
 
         override fun onPayloadTransferUpdate(p0: String, p1: PayloadTransferUpdate) {

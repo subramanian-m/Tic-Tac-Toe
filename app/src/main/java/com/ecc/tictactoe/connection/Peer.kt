@@ -20,7 +20,7 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
     val acceptedConnectionsObservable: MutableLiveData<List<Player>> = MutableLiveData()
 
     private var hostEndpointId: String? = null
-    private lateinit var host: Player
+    lateinit var host: Player
     lateinit var selfEndpointId: String
         private set
     private lateinit var authenticationToken: String
@@ -131,6 +131,6 @@ class Peer(private val context: Context, val name: String, val peerCallback: Pee
     }
 
     fun sendPayload(endpointId: String, payload: String) {
-        connectionsClient.sendPayload(endpointId, Payload.fromBytes(payload.toByteArray()))
+        connectionsClient.sendPayload(endpointId, PayloadData("data", payload).toPayload())
     }
 }

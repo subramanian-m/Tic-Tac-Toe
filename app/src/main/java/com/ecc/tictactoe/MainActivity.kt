@@ -19,9 +19,13 @@ import androidx.recyclerview.widget.RecyclerView
 import com.ecc.tictactoe.callback.AwaitingConnectionViewHolderCallback
 import com.ecc.tictactoe.connection.Host
 import com.ecc.tictactoe.connection.Peer
+import com.ecc.tictactoe.connection.callback.GameCallback
+import com.ecc.tictactoe.connection.callback.HostCallback
 import com.ecc.tictactoe.connection.callback.PeerCallback
 import com.ecc.tictactoe.connection.data.PayloadData
 import com.ecc.tictactoe.data.AlertActionConfig
+import com.ecc.tictactoe.data.GameMove
+import com.ecc.tictactoe.data.GameTurn
 import com.ecc.tictactoe.data.InitiateGame
 import com.ecc.tictactoe.view.AcceptedConnectionsAdapter
 import com.ecc.tictactoe.view.AwaitingConnectionsAdapter
@@ -46,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var host: Host
     private lateinit var peer: Peer
     private var gson = Gson()
+    lateinit var gameFragment: GameFragment
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,7 +75,26 @@ class MainActivity : AppCompatActivity() {
             val acceptedConnectionsAdapter = AcceptedConnectionsAdapter(listOf())
 
             val name = player_name.text.toString()
-            host = Host(this, name)
+            host = Host(this, name, object : HostCallback {
+                override fun payloadReceived(payload: String) {
+                    val payloadData = gson.fromJson<PayloadData>(payload, PayloadData::class.java)
+                    if (payloadData.type == "_move_") {
+                        val gameMove =
+                            gson.fromJson<GameMove>(payloadData.value, GameMove::class.java)
+                        gameFragment.move(gameMove.endpointId, gameMove.row, gameMove.column)
+
+                        val gameTurn = GameTurn(host.acceptedConnections[0].endPointId)
+                        val payloadGameTurnData =
+                            PayloadData("_gameTurn_", gson.toJson(gameTurn))
+                        host.sendPayload(
+                            host.acceptedConnections[1].endPointId,
+                            gson.toJson(payloadGameTurnData)
+                        )
+                        gameFragment.isInteractive = true
+                    }
+                }
+
+            })
             host.awaitingConnectionsObservable.observe(this, Observer { players ->
                 awaitingConnectionsAdapter.players = players
                 awaitingConnectionsAdapter.notifyDataSetChanged()
@@ -141,16 +165,83 @@ class MainActivity : AppCompatActivity() {
                     if (payloadData.type == "_initiate_") {
                         val initiateGame =
                             gson.fromJson<InitiateGame>(payloadData.value, InitiateGame::class.java)
-                        val gameFragment = GameFragment(
+
+                        gameFragment = GameFragment(
                             peer.selfEndpointId,
                             initiateGame.player1,
                             initiateGame.symbol1,
                             initiateGame.player2,
-                            initiateGame.symbol2
+                            initiateGame.symbol2,
+                            object : GameCallback {
+                                override fun gameMove(
+                                    id: String,
+                                    row: Int,
+                                    column: Int,
+                                    status: GameFragment.STATUS
+                                ) {
+                                    val gameMove = GameMove(id, row, column)
+                                    val gameMovePayload =
+                                        PayloadData("_move_", gson.toJson(gameMove))
+                                    peer.sendPayload(
+                                        peer.host.endPointId,
+                                        gson.toJson(gameMovePayload)
+                                    )
+
+                                    if (status == GameFragment.STATUS.WIN) {
+                                        if (id == peer.acceptedConnections[1].endPointId) {
+                                            val title = "Congratulations.!"
+                                            val message = "Congratulations.! You won.!"
+
+                                            val positiveButton = AlertActionConfig(
+                                                AlertDialog.BUTTON_POSITIVE,
+                                                "OK",
+                                                DialogInterface.OnClickListener { dialog, _ ->
+                                                    dialog.dismiss()
+                                                })
+                                            showDialog(title, message, positiveButton)
+
+                                        } else {
+                                            val title = "OOPS.!"
+                                            val message = "OOPS.! You lost.!"
+
+                                            val positiveButton = AlertActionConfig(
+                                                AlertDialog.BUTTON_POSITIVE,
+                                                "OK",
+                                                DialogInterface.OnClickListener { dialog, _ ->
+                                                    dialog.dismiss()
+                                                })
+                                            showDialog(title, message, positiveButton)
+                                        }
+                                    } else if (status == GameFragment.STATUS.DRAW) {
+                                        val title = "-----------.!"
+                                        val message = "----------.! It's a tie.!"
+
+                                        val positiveButton = AlertActionConfig(
+                                            AlertDialog.BUTTON_POSITIVE,
+                                            "OK",
+                                            DialogInterface.OnClickListener { dialog, _ ->
+                                                dialog.dismiss()
+                                            })
+                                        showDialog(title, message, positiveButton)
+                                    }
+
+                                }
+
+                            }
                         )
                         val transaction = supportFragmentManager.beginTransaction()
                         transaction.add(R.id.game_container, gameFragment)
                         transaction.commit()
+                    } else if (payloadData.type == "_gameTurn_") {
+                        val gameTurn =
+                            gson.fromJson<GameTurn>(payloadData.value, GameTurn::class.java)
+                        if (gameTurn.endpointId == gameFragment.id) {
+                            gameFragment.isInteractive = true
+                        }
+                    } else if (payloadData.type == "_move_") {
+                        val gameMove =
+                            gson.fromJson<GameMove>(payloadData.value, GameMove::class.java)
+                        gameFragment.move(gameMove.endpointId, gameMove.row, gameMove.column)
                     }
                 }
 
@@ -209,16 +300,89 @@ class MainActivity : AppCompatActivity() {
                 val payloadData = PayloadData("_initiate_", gson.toJson(gameEvent))
                 host.sendPayload(connectedPlayers[1].endPointId, gson.toJson(payloadData))
 
-                val gameFragment = GameFragment(
+                gameFragment = GameFragment(
                     connectedPlayers[0].endPointId,
                     connectedPlayers[0],
                     player1Symbol,
                     connectedPlayers[1],
-                    player2Symbol
+                    player2Symbol,
+                    object : GameCallback {
+                        override fun gameMove(
+                            id: String,
+                            row: Int,
+                            column: Int,
+                            status: GameFragment.STATUS
+                        ) {
+                            val gameMove = GameMove(id, row, column)
+                            val gameMovePayload =
+                                PayloadData("_move_", gson.toJson(gameMove))
+                            host.sendPayload(
+                                host.acceptedConnections[1].endPointId,
+                                gson.toJson(gameMovePayload)
+                            )
+
+                            val gameTurn = GameTurn(host.acceptedConnections[1].endPointId)
+                            val payloadGameTurnData =
+                                PayloadData("_gameTurn_", gson.toJson(gameTurn))
+                            host.sendPayload(
+                                connectedPlayers[1].endPointId,
+                                gson.toJson(payloadGameTurnData)
+                            )
+
+                            if (status == GameFragment.STATUS.WIN) {
+                                if (id == host.acceptedConnections[0].endPointId) {
+                                    val title = "Congratulations.!"
+                                    val message = "Congratulations.! You won.!"
+
+                                    val positiveButton = AlertActionConfig(
+                                        AlertDialog.BUTTON_POSITIVE,
+                                        "OK",
+                                        DialogInterface.OnClickListener { dialog, _ ->
+                                            dialog.dismiss()
+                                        })
+                                    showDialog(title, message, positiveButton)
+
+                                } else {
+                                    val title = "OOPS.!"
+                                    val message = "OOPS.! You lost.!"
+
+                                    val positiveButton = AlertActionConfig(
+                                        AlertDialog.BUTTON_POSITIVE,
+                                        "OK",
+                                        DialogInterface.OnClickListener { dialog, _ ->
+                                            dialog.dismiss()
+                                        })
+                                    showDialog(title, message, positiveButton)
+                                }
+                            } else if (status == GameFragment.STATUS.DRAW) {
+                                val title = "-----------.!"
+                                val message = "----------.! It's a tie.!"
+
+                                val positiveButton = AlertActionConfig(
+                                    AlertDialog.BUTTON_POSITIVE,
+                                    "OK",
+                                    DialogInterface.OnClickListener { dialog, _ ->
+                                        dialog.dismiss()
+                                    })
+                                showDialog(title, message, positiveButton)
+                            }
+                        }
+                    }
                 )
                 val transaction = supportFragmentManager.beginTransaction()
                 transaction.add(R.id.game_container, gameFragment)
                 transaction.commit()
+
+                val gameTurn = if (player1Symbol == 'X') {
+                    GameTurn(connectedPlayers[0].endPointId)
+                } else {
+                    GameTurn(connectedPlayers[1].endPointId)
+                }
+                val payloadGameTurnData = PayloadData("_gameTurn_", gson.toJson(gameTurn))
+                host.sendPayload(connectedPlayers[1].endPointId, gson.toJson(payloadGameTurnData))
+                if (gameTurn.endpointId == "_endpointId_") {
+                    gameFragment.isInteractive = true
+                }
             }
         }
 
